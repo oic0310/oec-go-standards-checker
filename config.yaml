@@ -1,0 +1,310 @@
+# Go言語 API開発標準 チェックルール設定
+# このファイルをカスタマイズして独自ルールを追加できます
+
+# ========================================
+# 基本設定
+# ========================================
+settings:
+  # チェック対象ディレクトリ（空の場合はカレントディレクトリ）
+  target_dir: ""
+  # 除外パターン
+  exclude_patterns:
+    - "*_test.go"      # テストファイルは一部ルールを緩和
+    - "vendor/*"       # vendorディレクトリ
+    - ".git/*"         # gitディレクトリ
+    - "*.pb.go"        # Protocol Buffers生成ファイル
+    - "*_mock.go"      # モックファイル
+  # レポート形式: text, json
+  report_format: "text"
+  # 重要度フィルター: error, warning, info (この重要度以上を表示)
+  min_severity: "info"
+
+# ========================================
+# 命名規則チェック
+# ========================================
+naming:
+  enabled: true
+  rules:
+    # パッケージ名: 小文字のみ、アンダースコア禁止
+    package_name:
+      enabled: true
+      pattern: "^[a-z][a-z0-9]*$"
+      severity: "error"
+      message: "パッケージ名は小文字のみで構成してください"
+    
+    # 公開関数/型: PascalCase
+    exported_names:
+      enabled: true
+      severity: "warning"
+      message: "公開シンボルはPascalCaseで命名してください"
+    
+    # 略語: ID, URL, HTTP等は大文字維持
+    acronyms:
+      enabled: true
+      words: ["ID", "URL", "HTTP", "HTTPS", "API", "JSON", "XML", "SQL", "HTML", "CSS", "UUID", "URI", "AWS", "SDK"]
+      severity: "info"
+      message: "略語は大文字を維持してください (例: userID, httpClient)"
+    
+    # ファイル名: スネークケース
+    file_name:
+      enabled: true
+      pattern: "^[a-z][a-z0-9_]*\\.go$"
+      severity: "warning"
+      message: "ファイル名はスネークケース小文字で命名してください"
+    
+    # インタフェース名: 動詞+er または Repository/Service等
+    interface_name:
+      enabled: true
+      suffixes: ["er", "or", "Repository", "Service", "Client", "Handler", "Manager"]
+      severity: "info"
+      message: "インタフェース名は動詞+er形式または標準的なサフィックスを使用してください"
+    
+    # センチネルエラー: Errプレフィックス
+    error_var:
+      enabled: true
+      pattern: "^Err[A-Z]"
+      severity: "warning"
+      message: "センチネルエラーはErrプレフィックスで定義してください"
+
+# ========================================
+# コード構造チェック
+# ========================================
+structure:
+  enabled: true
+  rules:
+    # 関数の最大行数
+    max_function_lines:
+      enabled: true
+      limit: 50
+      severity: "warning"
+      message: "関数は50行以内を目安にしてください"
+    
+    # 最大ネストレベル
+    max_nesting_level:
+      enabled: true
+      limit: 3
+      severity: "warning"
+      message: "ネストは3レベル以内を目安にしてください"
+    
+    # パラメータ数の上限
+    max_parameters:
+      enabled: true
+      limit: 5
+      severity: "info"
+      message: "関数のパラメータは5個以内を目安にしてください"
+    
+    # 戻り値の数の上限
+    max_return_values:
+      enabled: true
+      limit: 3
+      severity: "info"
+      message: "関数の戻り値は3個以内を目安にしてください"
+
+# ========================================
+# エラーハンドリングチェック
+# ========================================
+error_handling:
+  enabled: true
+  rules:
+    # エラー無視の禁止
+    no_ignored_errors:
+      enabled: true
+      severity: "error"
+      message: "エラーは必ず明示的にハンドリングしてください"
+      # 例外として許可するパターン
+      allowed_patterns:
+        - "defer.*Close"  # defer file.Close() は許容
+        - "fmt\\.Print"   # fmt.Println等は許容
+    
+    # エラーラップの推奨
+    error_wrapping:
+      enabled: true
+      severity: "info"
+      message: "エラーはfmt.Errorf(\"...: %w\", err)でラップしてコンテキストを追加してください"
+    
+    # panicの使用制限
+    no_panic:
+      enabled: true
+      severity: "warning"
+      message: "panicの使用は避け、エラーを返却してください"
+      # 例外として許可するファイル/関数
+      allowed_in:
+        - "main.go"       # main関数での初期化失敗
+        - "*_test.go"     # テストコード
+
+# ========================================
+# ログ出力チェック
+# ========================================
+logging:
+  enabled: true
+  rules:
+    # 標準log禁止（構造化ログ推奨）
+    no_std_log:
+      enabled: false  # プロジェクトによって有効化
+      severity: "info"
+      message: "標準logパッケージではなく構造化ログ(zerolog等)を使用してください"
+    
+    # fmt.Printlnデバッグ禁止
+    no_fmt_println:
+      enabled: true
+      severity: "warning"
+      message: "本番コードでfmt.Printlnは使用せず、適切なログライブラリを使用してください"
+
+# ========================================
+# レイヤーアーキテクチャチェック
+# ========================================
+architecture:
+  enabled: true
+  rules:
+    # Handler→Service→Repositoryの依存方向
+    layer_dependencies:
+      enabled: true
+      severity: "error"
+      layers:
+        - name: "handler"
+          can_import: ["service", "dto", "model", "middleware", "config"]
+          cannot_import: ["repository"]
+        - name: "service"
+          can_import: ["repository", "model", "dto", "config"]
+          cannot_import: ["handler"]
+        - name: "repository"
+          can_import: ["model", "config"]
+          cannot_import: ["handler", "service"]
+      message: "レイヤー間の依存方向を守ってください"
+
+# ========================================
+# ディレクトリ構成チェック
+# ========================================
+directory:
+  enabled: true
+  rules:
+    # 必須ディレクトリ
+    required_dirs:
+      enabled: true
+      severity: "info"
+      dirs:
+        - "cmd"           # エントリポイント
+        - "internal"      # 内部パッケージ
+      message: "標準ディレクトリ構成を使用してください"
+    
+    # 推奨ディレクトリ
+    recommended_dirs:
+      enabled: true
+      severity: "info"
+      dirs:
+        - "internal/handler"
+        - "internal/service"
+        - "internal/repository"
+        - "internal/model"
+      message: "レイヤードアーキテクチャに基づくディレクトリ構成を推奨します"
+
+# ========================================
+# 構造体タグチェック
+# ========================================
+struct_tags:
+  enabled: true
+  rules:
+    # JSONタグの命名規則
+    json_tag:
+      enabled: true
+      style: "snake_case"  # snake_case, camelCase
+      severity: "warning"
+      message: "JSONタグはスネークケースで記述してください"
+    
+    # バリデーションタグの存在確認
+    validation_tag:
+      enabled: true
+      severity: "info"
+      required_for:
+        - "*Request"      # Requestで終わる構造体
+        - "*Input"        # Inputで終わる構造体
+      message: "リクエスト構造体にはvalidateタグを付与してください"
+
+# ========================================
+# AWS/Lambda固有チェック
+# ========================================
+aws_lambda:
+  enabled: true
+  rules:
+    # init()でのAWSクライアント初期化
+    init_aws_clients:
+      enabled: true
+      severity: "info"
+      message: "AWSクライアントはinit()で初期化してコールドスタートを最適化してください"
+    
+    # コンテキスト伝播
+    context_propagation:
+      enabled: true
+      severity: "warning"
+      message: "AWS SDKの呼び出しにはcontextを渡してください"
+    
+    # SQSバッチ処理での部分失敗対応
+    sqs_batch_failures:
+      enabled: true
+      severity: "warning"
+      message: "SQSバッチ処理ではBatchItemFailuresをサポートしてください"
+
+# ========================================
+# カスタムルール（正規表現ベース）
+# ========================================
+custom_rules:
+  # 例: ハードコードされた認証情報の検出
+  - name: "no_hardcoded_secrets"
+    enabled: true
+    severity: "error"
+    pattern: '(?i)(password|secret|api_key|apikey|token)\s*[:=]\s*["\'][^"\']{8,}["\']'
+    message: "認証情報をハードコードしないでください。環境変数を使用してください"
+    exclude_files:
+      - "*_test.go"
+      - "*.md"
+  
+  # 例: TODO/FIXMEの形式チェック
+  - name: "todo_format"
+    enabled: true
+    severity: "info"
+    pattern: '(TODO|FIXME)(?!\([a-zA-Z]+\))'
+    message: "TODO/FIXMEには担当者を記載してください (例: TODO(yamada): ...)"
+    exclude_files: []
+  
+  # 例: time.Sleepの使用警告
+  - name: "no_time_sleep_in_production"
+    enabled: true
+    severity: "warning"
+    pattern: 'time\.Sleep\('
+    message: "time.Sleepの使用は避け、適切な同期機構を使用してください"
+    exclude_files:
+      - "*_test.go"
+      - "main.go"
+  
+  # 例: 直接的なos.Exit呼び出し
+  - name: "no_os_exit"
+    enabled: true
+    severity: "warning"
+    pattern: 'os\.Exit\('
+    message: "os.Exitの直接呼び出しは避け、エラーを返却してください"
+    exclude_files:
+      - "main.go"
+      - "*_test.go"
+  
+  # 例: ハードコードされたポート番号
+  - name: "no_hardcoded_ports"
+    enabled: false  # 必要に応じて有効化
+    severity: "info"
+    pattern: ':\d{4,5}["\']'
+    message: "ポート番号は環境変数から取得してください"
+    exclude_files:
+      - "*_test.go"
+
+# ========================================
+# プロジェクト固有ルール（ここに追加）
+# ========================================
+project_rules:
+  # 例: 特定のパッケージの使用禁止
+  - name: "no_deprecated_package"
+    enabled: false
+    severity: "error"
+    type: "import_ban"
+    packages:
+      - "io/ioutil"  # Go 1.16で非推奨
+      - "github.com/pkg/errors"  # 標準errorsを使用
+    message: "非推奨パッケージを使用しないでください"
